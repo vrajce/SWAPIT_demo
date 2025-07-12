@@ -1,102 +1,39 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Image, Calendar, MoreVertical, Search } from 'lucide-react';
+import { Send, Image, Calendar, MoreVertical, Search, User } from 'lucide-react';
 import { format } from 'date-fns';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 interface Message {
-  id: number;
-  senderId: number;
+  id: string;
+  sender_id: string;
+  receiver_id: string;
   content: string;
-  timestamp: Date;
-  isRead: boolean;
+  image_url: string | null;
+  sent_at: string;
+  is_read: boolean;
 }
 
 interface ChatUser {
-  id: number;
-  name: string;
-  avatar: string;
+  id: string;
+  fullname: string;
+  profile_pic: string | null;
   lastMessage: string;
-  lastMessageTime: Date;
+  lastMessageTime: string;
   unreadCount: number;
-  online: boolean;
 }
 
-const mockUsers: ChatUser[] = [
-  {
-    id: 1,
-    name: 'Sarah Chen',
-    avatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=100',
-    lastMessage: 'Great! When would you like to start our React sessions?',
-    lastMessageTime: new Date(Date.now() - 5 * 60 * 1000),
-    unreadCount: 2,
-    online: true
-  },
-  {
-    id: 2,
-    name: 'Marcus Johnson',
-    avatar: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=100',
-    lastMessage: 'I can teach you guitar basics this weekend',
-    lastMessageTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    unreadCount: 0,
-    online: false
-  },
-  {
-    id: 3,
-    name: 'Elena Rodriguez',
-    avatar: 'https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=100',
-    lastMessage: '¡Hola! Ready for our Spanish lesson?',
-    lastMessageTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    unreadCount: 1,
-    online: true
-  }
-];
-
-const mockMessages: { [key: number]: Message[] } = {
-  1: [
-    {
-      id: 1,
-      senderId: 1,
-      content: 'Hi! I saw your profile and I\'d love to learn React from you!',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      isRead: true
-    },
-    {
-      id: 2,
-      senderId: 0, // Current user
-      content: 'That sounds great! I\'m excited to help you learn React. What\'s your current experience level?',
-      timestamp: new Date(Date.now() - 1.5 * 60 * 60 * 1000),
-      isRead: true
-    },
-    {
-      id: 3,
-      senderId: 1,
-      content: 'I have some JavaScript experience but I\'m completely new to React. I\'d love to build my first component!',
-      timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000),
-      isRead: true
-    },
-    {
-      id: 4,
-      senderId: 0,
-      content: 'Perfect! We can start with the basics - JSX, components, and props. I can also teach you about state management.',
-      timestamp: new Date(Date.now() - 30 * 60 * 1000),
-      isRead: true
-    },
-    {
-      id: 5,
-      senderId: 1,
-      content: 'Great! When would you like to start our React sessions?',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000),
-      isRead: false
-    }
-  ]
-};
-
 export default function Chat() {
-  const [selectedUser, setSelectedUser] = useState<ChatUser | null>(mockUsers[0]);
-  const [messages, setMessages] = useState<Message[]>(mockMessages[1] || []);
+  const [chatUsers, setChatUsers] = useState<ChatUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -106,39 +43,211 @@ export default function Chat() {
     scrollToBottom();
   }, [messages]);
 
-  const handleUserSelect = (user: ChatUser) => {
-    setSelectedUser(user);
-    setMessages(mockMessages[user.id] || []);
-  };
+  // Fetch chat users (matched users)
+  useEffect(() => {
+    if (user) {
+      fetchChatUsers();
+    }
+  }, [user]);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedUser) return;
+  // Real-time subscription for messages
+  useEffect(() => {
+    if (!user) return;
 
-    const message: Message = {
-      id: Date.now(),
-      senderId: 0, // Current user
-      content: newMessage,
-      timestamp: new Date(),
-      isRead: true
+    const subscription = supabase
+      .channel('messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `sender_id=eq.${user.id} OR receiver_id=eq.${user.id}`
+        },
+        (payload) => {
+          const newMessage = payload.new as Message;
+          setMessages(prev => [...prev, newMessage]);
+          
+          // Update unread count for chat users
+          if (newMessage.sender_id !== user.id) {
+            setChatUsers(prev => prev.map(chatUser => 
+              chatUser.id === newMessage.sender_id 
+                ? { ...chatUser, unreadCount: chatUser.unreadCount + 1 }
+                : chatUser
+            ));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
     };
+  }, [user]);
 
-    setMessages(prev => [...prev, message]);
-    setNewMessage('');
+  const fetchChatUsers = async () => {
+    try {
+      // Get matched users
+      const { data: matches, error } = await supabase
+        .from('swap_requests')
+        .select(`
+          id,
+          from_user_id,
+          to_user_id,
+          users!swap_requests_from_user_id_fkey(
+            id,
+            fullname,
+            profile_pic
+          ),
+          users!swap_requests_to_user_id_fkey(
+            id,
+            fullname,
+            profile_pic
+          )
+        `)
+        .eq('status', 'matched')
+        .or(`from_user_id.eq.${user?.id},to_user_id.eq.${user?.id}`);
 
-    // Simulate typing response
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      const response: Message = {
-        id: Date.now() + 1,
-        senderId: selectedUser.id,
-        content: 'Thanks for your message! I\'ll get back to you soon.',
-        timestamp: new Date(),
-        isRead: false
-      };
-      setMessages(prev => [...prev, response]);
-    }, 2000);
+      if (error) throw error;
+
+      // Transform matches to chat users
+      const users: ChatUser[] = [];
+      for (const match of matches || []) {
+        const otherUser = match.from_user_id === user?.id 
+          ? match['users!swap_requests_to_user_id_fkey']
+          : match['users!swap_requests_from_user_id_fkey'];
+
+        if (otherUser) {
+          // Get last message
+          const { data: lastMessage } = await supabase
+            .from('messages')
+            .select('*')
+            .or(`and(sender_id.eq.${user?.id},receiver_id.eq.${otherUser.id}),and(sender_id.eq.${otherUser.id},receiver_id.eq.${user?.id})`)
+            .order('sent_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          // Get unread count
+          const { count: unreadCount } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('sender_id', otherUser.id)
+            .eq('receiver_id', user?.id)
+            .eq('is_read', false);
+
+          users.push({
+            id: otherUser.id,
+            fullname: otherUser.fullname || 'Anonymous',
+            profile_pic: otherUser.profile_pic,
+            lastMessage: lastMessage?.content || 'Start a conversation!',
+            lastMessageTime: lastMessage?.sent_at || new Date().toISOString(),
+            unreadCount: unreadCount || 0
+          });
+        }
+      }
+
+      setChatUsers(users);
+      if (users.length > 0 && !selectedUser) {
+        setSelectedUser(users[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching chat users:', error);
+      toast.error('Failed to load chat users');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const fetchMessages = async (otherUserId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${user?.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user?.id})`)
+        .order('sent_at', { ascending: true });
+
+      if (error) throw error;
+
+      setMessages(data || []);
+
+      // Mark messages as read
+      await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('sender_id', otherUserId)
+        .eq('receiver_id', user?.id)
+        .eq('is_read', false);
+
+      // Update unread count
+      setChatUsers(prev => prev.map(chatUser => 
+        chatUser.id === otherUserId 
+          ? { ...chatUser, unreadCount: 0 }
+          : chatUser
+      ));
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      toast.error('Failed to load messages');
+    }
+  };
+
+  const handleUserSelect = (chatUser: ChatUser) => {
+    setSelectedUser(chatUser);
+    fetchMessages(chatUser.id);
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedUser || !user) return;
+
+    setSending(true);
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: user.id,
+          receiver_id: selectedUser.id,
+          content: newMessage.trim(),
+          is_read: false
+        });
+
+      if (error) throw error;
+
+      setNewMessage('');
+      
+      // Update last message in chat users
+      setChatUsers(prev => prev.map(chatUser => 
+        chatUser.id === selectedUser.id 
+          ? { 
+              ...chatUser, 
+              lastMessage: newMessage.trim(),
+              lastMessageTime: new Date().toISOString()
+            }
+          : chatUser
+      ));
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen pt-16 bg-gradient-to-br from-orange-50 via-white to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl text-gray-600">Loading chats...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-16 bg-gradient-to-br from-orange-50 via-white to-blue-50">
@@ -162,198 +271,158 @@ export default function Chat() {
 
             {/* Chat List */}
             <div className="flex-1 overflow-y-auto">
-              {mockUsers.map((user) => (
-                <motion.div
-                  key={user.id}
-                  whileHover={{ backgroundColor: '#f9fafb' }}
-                  onClick={() => handleUserSelect(user)}
-                  className={`p-4 cursor-pointer border-b border-gray-100 ${
-                    selectedUser?.id === user.id ? 'bg-orange-50 border-orange-200' : ''
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="relative">
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                      {user.online && (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
-                      )}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-gray-900 truncate">
-                          {user.name}
-                        </h3>
-                        <span className="text-xs text-gray-500">
-                          {format(user.lastMessageTime, 'HH:mm')}
-                        </span>
+              {chatUsers.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No matches yet</p>
+                  <p className="text-sm">Start swiping to find chat partners!</p>
+                </div>
+              ) : (
+                chatUsers.map((chatUser) => (
+                  <motion.div
+                    key={chatUser.id}
+                    whileHover={{ backgroundColor: '#f9fafb' }}
+                    onClick={() => handleUserSelect(chatUser)}
+                    className={`p-4 cursor-pointer border-b border-gray-100 ${
+                      selectedUser?.id === chatUser.id ? 'bg-orange-50 border-orange-200' : ''
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="relative">
+                        <img
+                          src={chatUser.profile_pic || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=100`}
+                          alt={chatUser.fullname}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                        {chatUser.unreadCount > 0 && (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center">
+                            {chatUser.unreadCount}
+                          </div>
+                        )}
                       </div>
-                      <p className="text-sm text-gray-600 truncate">{user.lastMessage}</p>
-                    </div>
-                    
-                    {user.unreadCount > 0 && (
-                      <div className="w-5 h-5 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center">
-                        {user.unreadCount}
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-gray-900 truncate">
+                            {chatUser.fullname}
+                          </h3>
+                          <span className="text-xs text-gray-500">
+                            {format(new Date(chatUser.lastMessageTime), 'HH:mm')}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 truncate">{chatUser.lastMessage}</p>
                       </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </div>
           </div>
 
           {/* Chat Area */}
-          {selectedUser ? (
-            <div className="flex-1 flex flex-col">
-              {/* Chat Header */}
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
+          <div className="flex-1 flex flex-col">
+            {selectedUser ? (
+              <>
+                {/* Chat Header */}
+                <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
                     <img
-                      src={selectedUser.avatar}
-                      alt={selectedUser.name}
+                      src={selectedUser.profile_pic || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=100`}
+                      alt={selectedUser.fullname}
                       className="w-10 h-10 rounded-full object-cover"
                     />
-                    {selectedUser.online && (
-                      <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-                    )}
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">{selectedUser.fullname}</h2>
+                      <p className="text-sm text-gray-500">Matched</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="font-semibold text-gray-900">{selectedUser.name}</h2>
-                    <p className="text-sm text-gray-500">
-                      {selectedUser.online ? 'Online' : 'Last seen recently'}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="p-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                  >
-                    <Calendar className="w-5 h-5" />
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    <MoreVertical className="w-5 h-5" />
-                  </motion.button>
-                </div>
-              </div>
-
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {messages.map((message) => (
-                  <motion.div
-                    key={message.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`flex ${message.senderId === 0 ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
-                        message.senderId === 0
-                          ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
-                          : 'bg-gray-100 text-gray-900'
-                      }`}
+                  <div className="flex items-center space-x-2">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
                     >
-                      <p className="text-sm">{message.content}</p>
-                      <p className={`text-xs mt-1 ${
-                        message.senderId === 0 ? 'text-orange-100' : 'text-gray-500'
-                      }`}>
-                        {format(message.timestamp, 'HH:mm')}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
-                
-                {isTyping && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex justify-start"
-                  >
-                    <div className="bg-gray-100 px-4 py-2 rounded-2xl">
-                      <div className="flex space-x-1">
-                        <motion.div
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: 0 }}
-                          className="w-2 h-2 bg-gray-400 rounded-full"
-                        />
-                        <motion.div
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
-                          className="w-2 h-2 bg-gray-400 rounded-full"
-                        />
-                        <motion.div
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
-                          className="w-2 h-2 bg-gray-400 rounded-full"
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-                
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Message Input */}
-              <div className="p-6 border-t border-gray-200">
-                <div className="flex items-center space-x-4">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    <Image className="w-5 h-5" />
-                  </motion.button>
-                  
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                      placeholder="Type your message..."
-                      className="w-full px-4 py-3 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-colors"
-                    />
+                      <Calendar className="w-5 h-5" />
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </motion.button>
                   </div>
-                  
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleSendMessage}
-                    disabled={!newMessage.trim()}
-                    className={`p-3 rounded-full transition-colors ${
-                      newMessage.trim()
-                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    <Send className="w-5 h-5" />
-                  </motion.button>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  {messages.map((message) => (
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`flex ${message.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          message.sender_id === user?.id
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-gray-100 text-gray-900'
+                        }`}
+                      >
+                        <p className="text-sm">{message.content}</p>
+                        <p className={`text-xs mt-1 ${
+                          message.sender_id === user?.id ? 'text-orange-100' : 'text-gray-500'
+                        }`}>
+                          {format(new Date(message.sent_at), 'HH:mm')}
+                        </p>
+                      </div>
+                    </motion.div>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Message Input */}
+                <div className="p-6 border-t border-gray-200">
+                  <div className="flex items-center space-x-3">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                    >
+                      <Image className="w-5 h-5" />
+                    </motion.button>
+                    <div className="flex-1">
+                      <textarea
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="Type a message..."
+                        rows={1}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                      />
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleSendMessage}
+                      disabled={!newMessage.trim() || sending}
+                      className="p-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Send className="w-5 h-5" />
+                    </motion.button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <User className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">Select a conversation to start chatting</p>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Send className="w-8 h-8 text-orange-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Select a conversation</h3>
-                <p className="text-gray-600">Choose a chat to start messaging</p>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
-import { Eye, EyeOff, Mail, Lock, User, Heart } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Heart, MapPin, FileText, Upload } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 
 interface SignupForm {
@@ -11,6 +12,10 @@ interface SignupForm {
   email: string;
   password: string;
   confirmPassword: string;
+  location: string;
+  description: string;
+  profile_pic: FileList;
+  public_profile: boolean;
 }
 
 export default function Signup() {
@@ -22,13 +27,43 @@ export default function Signup() {
   const { register, handleSubmit, formState: { errors }, watch } = useForm<SignupForm>();
 
   const password = watch('password');
+  const profilePic = watch('profile_pic');
 
   const onSubmit = async (data: SignupForm) => {
     setIsLoading(true);
     try {
+      // Upload profile picture if provided
+      let profilePicUrl = null;
+      if (data.profile_pic && data.profile_pic[0]) {
+        const file = data.profile_pic[0];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `profile-pics/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, file);
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        profilePicUrl = publicUrl;
+      }
+
+      // Create user account
       await signUp(data.email, data.password, {
-        fullname: data.fullname
+        fullname: data.fullname,
+        location: data.location,
+        description: data.description,
+        profile_pic: profilePicUrl,
+        public_profile: data.public_profile
       });
+
       toast.success('Account created successfully!');
       navigate('/onboarding');
     } catch (error: any) {
@@ -65,7 +100,7 @@ export default function Signup() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
               <label htmlFor="fullname" className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name
+                Full Name *
               </label>
               <div className="relative">
                 <input
@@ -94,7 +129,7 @@ export default function Signup() {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
+                Email Address *
               </label>
               <div className="relative">
                 <input
@@ -123,7 +158,7 @@ export default function Signup() {
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
+                Password *
               </label>
               <div className="relative">
                 <input
@@ -159,7 +194,7 @@ export default function Signup() {
 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm Password
+                Confirm Password *
               </label>
               <div className="relative">
                 <input
@@ -188,6 +223,75 @@ export default function Signup() {
               {errors.confirmPassword && (
                 <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
               )}
+            </div>
+
+            <div>
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-2">
+                Location
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  id="location"
+                  {...register('location')}
+                  className="w-full pl-12 pr-4 py-3 rounded-lg border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition-colors duration-200"
+                  placeholder="City, Country"
+                />
+                <MapPin className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                About You
+              </label>
+              <div className="relative">
+                <textarea
+                  id="description"
+                  {...register('description')}
+                  rows={3}
+                  className="w-full pl-12 pr-4 py-3 rounded-lg border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition-colors duration-200 resize-none"
+                  placeholder="Tell us about yourself..."
+                />
+                <FileText className="absolute left-4 top-3 w-5 h-5 text-gray-400" />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="profile_pic" className="block text-sm font-medium text-gray-700 mb-2">
+                Profile Picture
+              </label>
+              <div className="relative">
+                <input
+                  type="file"
+                  id="profile_pic"
+                  accept="image/*"
+                  {...register('profile_pic')}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="profile_pic"
+                  className="w-full pl-12 pr-4 py-3 rounded-lg border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition-colors duration-200 cursor-pointer flex items-center"
+                >
+                  <Upload className="absolute left-4 w-5 h-5 text-gray-400" />
+                  <span className="text-gray-500">
+                    {profilePic && profilePic[0] ? profilePic[0].name : 'Choose a profile picture'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="public_profile"
+                {...register('public_profile')}
+                className="form-checkbox h-4 w-4 text-orange-600"
+                defaultChecked={true}
+              />
+              <label htmlFor="public_profile" className="ml-2 text-sm text-gray-600">
+                Make my profile public (recommended for better matches)
+              </label>
             </div>
 
             <div className="flex items-center">

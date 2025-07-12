@@ -1,13 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Heart, Menu, User, MessageCircle, Calendar, LayoutDashboard } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Heart, Menu, User, MessageCircle, Calendar, LayoutDashboard, Bell, X, Check } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications } from '../../contexts/NotificationsContext';
+import { format } from 'date-fns';
 
 export default function Header() {
   const location = useLocation();
   const { user, signOut } = useAuth();
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -23,6 +27,26 @@ export default function Header() {
     { path: '/pricing', label: 'Pricing' },
     { path: '/contact', label: 'Contact' },
   ];
+
+  const handleNotificationClick = async (notificationId: string) => {
+    await markAsRead(notificationId);
+    setIsNotificationsOpen(false);
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'match':
+        return <Heart className="w-4 h-4 text-orange-500" />;
+      case 'message':
+        return <MessageCircle className="w-4 h-4 text-blue-500" />;
+      case 'session':
+        return <Calendar className="w-4 h-4 text-green-500" />;
+      case 'badge':
+        return <Heart className="w-4 h-4 text-purple-500" />;
+      default:
+        return <Bell className="w-4 h-4 text-gray-500" />;
+    }
+  };
 
   return (
     <motion.header
@@ -67,8 +91,90 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Auth Buttons */}
+          {/* Auth Buttons & Notifications */}
           <div className="hidden md:flex items-center space-x-4">
+            {user && (
+              <div className="relative">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className="relative p-2 text-gray-600 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </motion.button>
+
+                {/* Notifications Dropdown */}
+                <AnimatePresence>
+                  {isNotificationsOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden"
+                    >
+                      <div className="p-4 border-b border-gray-100">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-gray-900">Notifications</h3>
+                          {unreadCount > 0 && (
+                            <button
+                              onClick={markAllAsRead}
+                              className="text-sm text-orange-600 hover:text-orange-700"
+                            >
+                              Mark all read
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="max-h-96 overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="p-4 text-center text-gray-500">
+                            <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p>No notifications</p>
+                          </div>
+                        ) : (
+                          notifications.slice(0, 10).map((notification) => (
+                            <motion.div
+                              key={notification.id}
+                              whileHover={{ backgroundColor: '#f9fafb' }}
+                              className={`p-4 border-b border-gray-100 cursor-pointer ${
+                                !notification.is_read ? 'bg-orange-50' : ''
+                              }`}
+                              onClick={() => handleNotificationClick(notification.id)}
+                            >
+                              <div className="flex items-start space-x-3">
+                                {getNotificationIcon(notification.type)}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {notification.title}
+                                  </p>
+                                  <p className="text-sm text-gray-600 mt-1">
+                                    {notification.message}
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-2">
+                                    {format(new Date(notification.created_at), 'MMM dd, HH:mm')}
+                                  </p>
+                                </div>
+                                {!notification.is_read && (
+                                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                                )}
+                              </div>
+                            </motion.div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
             {user ? (
               <motion.button
                 whileHover={{ scale: 1.05 }}

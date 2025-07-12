@@ -35,14 +35,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, userData: any) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: userData
+        data: {
+          fullname: userData.fullname
+        }
       }
     });
+    
     if (error) throw error;
+
+    // If signup is successful and user is confirmed, create profile
+    if (data.user) {
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: data.user.id,
+          fullname: userData.fullname,
+          email: email,
+          location: userData.location || null,
+          description: userData.description || null,
+          profile_pic: userData.profile_pic || null,
+          public_profile: userData.public_profile !== undefined ? userData.public_profile : true,
+          trust_percentage: 100
+        });
+
+      if (profileError) {
+        console.error('Error creating user profile:', profileError);
+        // Don't throw error here as the auth account was created successfully
+      }
+    }
   };
 
   const signIn = async (email: string, password: string) => {
