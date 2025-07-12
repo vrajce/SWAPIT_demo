@@ -34,7 +34,6 @@ interface Match {
   user: {
     id: string;
     fullname: string;
-    profile_pic: string | null;
     skills: string[];
   };
   matchedAt: string;
@@ -123,7 +122,6 @@ export default function Schedule() {
           user: {
             id: otherUser.id,
             fullname: otherUser.fullname || 'Anonymous',
-            profile_pic: otherUser.profile_pic,
             skills: otherUser.user_skill_offer?.map((o: any) => o.skills.name) || []
           },
           matchedAt: match.created_at
@@ -319,11 +317,6 @@ export default function Schedule() {
                     className="p-4 border border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 transition-all"
                   >
                     <div className="flex items-center space-x-4 mb-3">
-                      <img
-                        src={match.user.profile_pic || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=100`}
-                        alt={match.user.fullname}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900">{match.user.fullname}</h3>
                         <div className="flex flex-wrap gap-1 mt-1">
@@ -385,11 +378,6 @@ export default function Schedule() {
                       className="p-4 border border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 transition-all"
                     >
                       <div className="flex items-center space-x-4 mb-3">
-                        <img
-                          src={otherUser.profile_pic || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=100`}
-                          alt={otherUser.fullname}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900">{otherUser.fullname}</h3>
                           <div className="flex items-center space-x-2 text-sm text-gray-600">

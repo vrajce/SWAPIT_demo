@@ -19,7 +19,6 @@ interface Message {
 interface ChatUser {
   id: string;
   fullname: string;
-  profile_pic: string | null;
   lastMessage: string;
   lastMessageTime: string;
   unreadCount: number;
@@ -138,7 +137,6 @@ export default function Chat() {
           users.push({
             id: otherUser.id,
             fullname: otherUser.fullname || 'Anonymous',
-            profile_pic: otherUser.profile_pic,
             lastMessage: lastMessage?.content || 'Start a conversation!',
             lastMessageTime: lastMessage?.sent_at || new Date().toISOString(),
             unreadCount: unreadCount || 0
@@ -290,7 +288,7 @@ export default function Chat() {
                     <div className="flex items-center space-x-3">
                       <div className="relative">
                         <img
-                          src={chatUser.profile_pic || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=100`}
+                          src={`https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=100`}
                           alt={chatUser.fullname}
                           className="w-12 h-12 rounded-full object-cover"
                         />
@@ -327,7 +325,7 @@ export default function Chat() {
                 <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <img
-                      src={selectedUser.profile_pic || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=100`}
+                      src={`https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=100`}
                       alt={selectedUser.fullname}
                       className="w-10 h-10 rounded-full object-cover"
                     />

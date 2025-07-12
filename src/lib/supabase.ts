@@ -16,7 +16,6 @@ export type Database = {
           password: string;
           location: string | null;
           description: string | null;
-          profile_pic: string | null;
           public_profile: boolean;
           trust_percentage: number;
           created_at: string;
@@ -28,7 +27,6 @@ export type Database = {
           password: string;
           location?: string | null;
           description?: string | null;
-          profile_pic?: string | null;
           public_profile?: boolean;
           trust_percentage?: number;
         };
@@ -38,7 +36,6 @@ export type Database = {
           password?: string;
           location?: string | null;
           description?: string | null;
-          profile_pic?: string | null;
           public_profile?: boolean;
           trust_percentage?: number;
           updated_at?: string;

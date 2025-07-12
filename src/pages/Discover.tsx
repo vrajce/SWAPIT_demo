@@ -11,7 +11,6 @@ interface Profile {
   name: string;
   age: number;
   location: string;
-  avatar: string;
   canTeach: string[];
   wantToLearn: string[];
   bio: string;
@@ -47,7 +46,6 @@ export default function Discover() {
             fullname,
             location,
             description,
-            profile_pic,
             user_skill_offer!inner(
               skills(name)
             ),
@@ -66,7 +64,6 @@ export default function Discover() {
           name: u.fullname || 'Anonymous',
           age: 25, // Mock age
           location: u.location || 'Unknown',
-          avatar: u.profile_pic || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=400`,
           canTeach: u.user_skill_offer?.map((o: any) => o.skills.name) || [],
           wantToLearn: u.user_skill_want?.map((w: any) => w.skills.name) || [],
           bio: u.description || 'No bio available',
@@ -299,7 +296,7 @@ export default function Discover() {
             {/* Profile Image */}
             <div className="relative h-2/3">
               <img
-                src={currentProfile.avatar}
+                src={`https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=400`}
                 alt={currentProfile.name}
                 className="w-full h-full object-cover"
               />

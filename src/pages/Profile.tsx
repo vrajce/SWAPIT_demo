@@ -15,7 +15,6 @@ interface UserProfile {
   email: string;
   location: string | null;
   description: string | null;
-  profile_pic: string | null;
   public_profile: boolean;
   trust_percentage: number;
   created_at: string;

@@ -57,7 +57,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: email,
           location: userData.location || null,
           description: userData.description || null,
-          profile_pic: userData.profile_pic || null,
           public_profile: userData.public_profile !== undefined ? userData.public_profile : true,
           trust_percentage: 100
         });
