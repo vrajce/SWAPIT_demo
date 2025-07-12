@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Heart, Menu, User, MessageCircle, Calendar } from 'lucide-react';
+import { Heart, Menu, User, MessageCircle, Calendar, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function Header() {
@@ -13,6 +13,7 @@ export default function Header() {
 
   const navItems = user ? [
     { path: '/discover', label: 'Discover', icon: Heart },
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/chat', label: 'Chat', icon: MessageCircle },
     { path: '/schedule', label: 'Schedule', icon: Calendar },
     { path: '/profile', label: 'Profile', icon: User },

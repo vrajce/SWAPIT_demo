@@ -2,10 +2,14 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Check, Plus, X } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function Onboarding() {
   const [currentStep, setCurrentStep] = useState(0);
+  const [skills, setSkills] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     canTeach: [] as string[],
     wantToLearn: [] as string[],
@@ -20,12 +24,26 @@ export default function Onboarding() {
   });
 
   const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const skillOptions = [
-    'JavaScript', 'Python', 'React', 'Node.js', 'Design', 'Photography',
-    'Guitar', 'Piano', 'Singing', 'Cooking', 'Spanish', 'French',
-    'Marketing', 'Writing', 'Yoga', 'Fitness', 'Drawing', 'Painting'
-  ];
+  // Fetch skills from database
+  React.useEffect(() => {
+    const fetchSkills = async () => {
+      const { data, error } = await supabase
+        .from('skills')
+        .select('*')
+        .order('name');
+      
+      if (error) {
+        console.error('Error fetching skills:', error);
+        toast.error('Failed to load skills');
+      } else {
+        setSkills(data || []);
+      }
+    };
+
+    fetchSkills();
+  }, []);
 
   const steps = [
     {
@@ -33,14 +51,14 @@ export default function Onboarding() {
       subtitle: 'Select skills you\'d love to share with others',
       field: 'canTeach',
       type: 'multi-select',
-      options: skillOptions
+      options: skills.map(skill => ({ id: skill.id, name: skill.name }))
     },
     {
       title: 'What do you want to learn?',
       subtitle: 'Choose skills you\'re excited to develop',
       field: 'wantToLearn',
       type: 'multi-select',
-      options: skillOptions
+      options: skills.map(skill => ({ id: skill.id, name: skill.name }))
     },
     {
       title: 'Your experience level',
@@ -95,19 +113,20 @@ export default function Onboarding() {
 
   const currentStepData = steps[currentStep];
 
-  const handleMultiSelect = (value: string) => {
+  const handleMultiSelect = (value: string | { id: string; name: string }) => {
+    const skillId = typeof value === 'string' ? value : value.id;
     const field = currentStepData.field as 'canTeach' | 'wantToLearn';
     const current = formData[field];
     
-    if (current.includes(value)) {
+    if (current.includes(skillId)) {
       setFormData(prev => ({
         ...prev,
-        [field]: current.filter(item => item !== value)
+        [field]: current.filter(item => item !== skillId)
       }));
     } else {
       setFormData(prev => ({
         ...prev,
-        [field]: [...current, value]
+        [field]: [...current, skillId]
       }));
     }
   };
@@ -151,14 +170,80 @@ export default function Onboarding() {
   };
 
   const handleSubmit = async () => {
+    if (!user) {
+      toast.error('User not authenticated');
+      return;
+    }
+
+    setLoading(true);
     try {
-      // Here you would save the onboarding data to Supabase
-      console.log('Onboarding data:', formData);
+      // Save user profile data
+      const { error: profileError } = await supabase
+        .from('users')
+        .upsert({
+          id: user.id,
+          fullname: user.user_metadata?.fullname || '',
+          email: user.email || '',
+          location: formData.location,
+          description: formData.bio,
+          public_profile: true
+        });
+
+      if (profileError) throw profileError;
+
+      // Save skills user can teach
+      if (formData.canTeach.length > 0) {
+        const teachSkills = formData.canTeach.map(skillId => ({
+          user_id: user.id,
+          skill_id: skillId,
+          proficiency_level: formData.experience.toLowerCase()
+        }));
+
+        const { error: teachError } = await supabase
+          .from('user_skill_offer')
+          .insert(teachSkills);
+
+        if (teachError) throw teachError;
+      }
+
+      // Save skills user wants to learn
+      if (formData.wantToLearn.length > 0) {
+        const learnSkills = formData.wantToLearn.map(skillId => ({
+          user_id: user.id,
+          skill_id: skillId,
+          priority_level: 'medium'
+        }));
+
+        const { error: learnError } = await supabase
+          .from('user_skill_want')
+          .insert(learnSkills);
+
+        if (learnError) throw learnError;
+      }
+
+      // Award first badge
+      const { data: firstBadge } = await supabase
+        .from('badges')
+        .select('id')
+        .eq('name', 'First Match')
+        .single();
+
+      if (firstBadge) {
+        await supabase
+          .from('user_badge')
+          .insert({
+            user_id: user.id,
+            badge_id: firstBadge.id
+          });
+      }
       
       toast.success('Profile setup complete!');
       navigate('/discover');
     } catch (error) {
+      console.error('Onboarding error:', error);
       toast.error('Failed to save profile. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -167,11 +252,13 @@ export default function Onboarding() {
       case 'multi-select':
         return (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {currentStepData.options?.map((option) => {
-              const isSelected = (formData[currentStepData.field as 'canTeach' | 'wantToLearn'] || []).includes(option);
+            {currentStepData.options?.map((option: any) => {
+              const optionId = typeof option === 'string' ? option : option.id;
+              const optionName = typeof option === 'string' ? option : option.name;
+              const isSelected = (formData[currentStepData.field as 'canTeach' | 'wantToLearn'] || []).includes(optionId);
               return (
                 <motion.button
-                  key={option}
+                  key={optionId}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => handleMultiSelect(option)}
@@ -182,7 +269,7 @@ export default function Onboarding() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">{option}</span>
+                    <span className="font-medium">{optionName}</span>
                     {isSelected && <Check className="w-5 h-5" />}
                   </div>
                 </motion.button>
@@ -327,14 +414,16 @@ export default function Onboarding() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleNext}
-                disabled={!isStepValid()}
+                disabled={!isStepValid() || loading}
                 className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                  isStepValid()
+                  isStepValid() && !loading
                     ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700'
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 }`}
               >
-                <span>{currentStep === steps.length - 1 ? 'Complete' : 'Next'}</span>
+                <span>
+                  {loading ? 'Saving...' : currentStep === steps.length - 1 ? 'Complete' : 'Next'}
+                </span>
                 <ChevronRight className="w-5 h-5" />
               </motion.button>
             </div>

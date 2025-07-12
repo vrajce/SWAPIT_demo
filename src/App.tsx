@@ -18,6 +18,7 @@ import Profile from './pages/Profile';
 import Leaderboard from './pages/Leaderboard';
 import Admin from './pages/Admin';
 import Feedback from './pages/Feedback';
+import Dashboard from './pages/Dashboard';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -60,6 +61,7 @@ function AppContent() {
             {/* Protected Routes */}
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/discover" element={<ProtectedRoute><Discover /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/schedule" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

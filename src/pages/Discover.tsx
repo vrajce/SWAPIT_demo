@@ -2,10 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, PanInfo, useAnimation } from 'framer-motion';
 import { Heart, X, Star, Clock, MapPin, Flame, RotateCcw } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 interface Profile {
-  id: number;
+  id: string;
   name: string;
   age: number;
   location: string;
@@ -18,71 +20,72 @@ interface Profile {
   badges: string[];
 }
 
-const mockProfiles: Profile[] = [
-  {
-    id: 1,
-    name: 'Sarah Chen',
-    age: 28,
-    location: 'San Francisco, CA',
-    avatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=400',
-    canTeach: ['React', 'JavaScript'],
-    wantToLearn: ['Photography', 'Guitar'],
-    bio: 'Full-stack developer passionate about creating beautiful user experiences. Looking to learn photography to capture the world around me.',
-    rating: 4.8,
-    availability: 'Weekday evenings',
-    badges: ['Quick Learner', 'Great Mentor']
-  },
-  {
-    id: 2,
-    name: 'Marcus Johnson',
-    age: 32,
-    location: 'New York, NY',
-    avatar: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=400',
-    canTeach: ['Guitar', 'Music Theory'],
-    wantToLearn: ['JavaScript', 'Web Development'],
-    bio: 'Professional guitarist with 10+ years experience. Ready to trade musical knowledge for coding skills!',
-    rating: 4.9,
-    availability: 'Weekends',
-    badges: ['Music Expert', 'Patient Teacher']
-  },
-  {
-    id: 3,
-    name: 'Elena Rodriguez',
-    age: 26,
-    location: 'Barcelona, Spain',
-    avatar: 'https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=400',
-    canTeach: ['Spanish', 'Cooking'],
-    wantToLearn: ['Design', 'Photography'],
-    bio: 'Native Spanish speaker and culinary enthusiast. Love sharing my culture and learning creative skills.',
-    rating: 4.7,
-    availability: 'Flexible',
-    badges: ['Cultural Exchange', 'Creative Spirit']
-  },
-  {
-    id: 4,
-    name: 'David Kim',
-    age: 30,
-    location: 'Seoul, Korea',
-    avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400',
-    canTeach: ['Photography', 'Photo Editing'],
-    wantToLearn: ['Korean', 'Cooking'],
-    bio: 'Professional photographer looking to expand horizons through cultural exchange and culinary adventures.',
-    rating: 4.6,
-    availability: 'Weekday mornings',
-    badges: ['Visual Artist', 'Tech Savvy']
-  }
-];
 
 export default function Discover() {
-  const [profiles, setProfiles] = useState(mockProfiles);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [dailySwipes, setDailySwipes] = useState(15); // Mock daily swipe count
+  const [loading, setLoading] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
   const controls = useAnimation();
+  const { user } = useAuth();
 
   const currentProfile = profiles[currentIndex];
 
+  // Fetch potential matches
+  React.useEffect(() => {
+    const fetchProfiles = async () => {
+      if (!user) return;
+
+      try {
+        // Get users with their skills
+        const { data: users, error } = await supabase
+          .from('users')
+          .select(`
+            id,
+            fullname,
+            location,
+            description,
+            profile_pic,
+            user_skill_offer!inner(
+              skills(name)
+            ),
+            user_skill_want!inner(
+              skills(name)
+            )
+          `)
+          .neq('id', user.id)
+          .limit(10);
+
+        if (error) throw error;
+
+        // Transform data to match Profile interface
+        const transformedProfiles: Profile[] = (users || []).map(u => ({
+          id: u.id,
+          name: u.fullname || 'Anonymous',
+          age: 25, // Mock age
+          location: u.location || 'Unknown',
+          avatar: u.profile_pic || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000000)}/pexels-photo-${Math.floor(Math.random() * 1000000)}.jpeg?auto=compress&cs=tinysrgb&w=400`,
+          canTeach: u.user_skill_offer?.map((o: any) => o.skills.name) || [],
+          wantToLearn: u.user_skill_want?.map((w: any) => w.skills.name) || [],
+          bio: u.description || 'No bio available',
+          rating: 4.5 + Math.random() * 0.5, // Mock rating
+          availability: 'Flexible', // Mock availability
+          badges: ['Active User'] // Mock badges
+        }));
+
+        setProfiles(transformedProfiles);
+      } catch (error) {
+        console.error('Error fetching profiles:', error);
+        toast.error('Failed to load profiles');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfiles();
+  }, [user]);
   const triggerMatch = () => {
     confetti({
       particleCount: 100,
@@ -116,9 +119,54 @@ export default function Discover() {
       transition: { duration: 0.3 }
     });
 
-    // Show match animation for right swipes (50% chance)
-    if (direction === 'right' && Math.random() > 0.5) {
-      triggerMatch();
+    // Handle swipe actions
+    if (direction === 'right' || direction === 'up') {
+      try {
+        // Create swap request
+        const { error } = await supabase
+          .from('swap_requests')
+          .insert({
+            from_user_id: user?.id,
+            to_user_id: currentProfile.id,
+            swipe_type: direction === 'up' ? 'super' : 'normal',
+            status: 'pending'
+          });
+
+        if (error && error.code !== '23505') { // Ignore duplicate key errors
+          throw error;
+        }
+
+        // Check for mutual match
+        const { data: mutualMatch } = await supabase
+          .from('swap_requests')
+          .select('*')
+          .eq('from_user_id', currentProfile.id)
+          .eq('to_user_id', user?.id)
+          .eq('status', 'pending')
+          .single();
+
+        if (mutualMatch) {
+          // Update both requests to matched
+          await supabase
+            .from('swap_requests')
+            .update({ status: 'matched' })
+            .in('id', [mutualMatch.id]);
+
+          // Create notification
+          await supabase
+            .from('notifications')
+            .insert({
+              user_id: user?.id,
+              type: 'match',
+              title: 'New Match!',
+              message: `You matched with ${currentProfile.name}!`
+            });
+
+          triggerMatch();
+        }
+      } catch (error) {
+        console.error('Error handling swipe:', error);
+      }
     }
 
     // Show appropriate toast messages
@@ -168,10 +216,20 @@ export default function Discover() {
 
   const resetStack = () => {
     setCurrentIndex(0);
-    setProfiles([...mockProfiles]);
     controls.set({ x: 0, y: 0, rotate: 0, opacity: 1 });
     toast.success('New profiles loaded!');
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen pt-16 bg-gradient-to-br from-orange-50 via-white to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl text-gray-600">Loading profiles...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (currentIndex >= profiles.length) {
     return (
