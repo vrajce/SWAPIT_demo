@@ -14,7 +14,6 @@ interface SignupForm {
   confirmPassword: string;
   location: string;
   description: string;
-  profile_pic: FileList;
   public_profile: boolean;
 }
 
@@ -27,40 +26,15 @@ export default function Signup() {
   const { register, handleSubmit, formState: { errors }, watch } = useForm<SignupForm>();
 
   const password = watch('password');
-  const profilePic = watch('profile_pic');
 
   const onSubmit = async (data: SignupForm) => {
     setIsLoading(true);
     try {
-      // Upload profile picture if provided
-      let profilePicUrl = null;
-      if (data.profile_pic && data.profile_pic[0]) {
-        const file = data.profile_pic[0];
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `profile-pics/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, file);
-
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath);
-
-        profilePicUrl = publicUrl;
-      }
-
       // Create user account
       await signUp(data.email, data.password, {
         fullname: data.fullname,
         location: data.location,
         description: data.description,
-        profile_pic: profilePicUrl,
         public_profile: data.public_profile
       });
 
@@ -254,30 +228,6 @@ export default function Signup() {
                   placeholder="Tell us about yourself..."
                 />
                 <FileText className="absolute left-4 top-3 w-5 h-5 text-gray-400" />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="profile_pic" className="block text-sm font-medium text-gray-700 mb-2">
-                Profile Picture
-              </label>
-              <div className="relative">
-                <input
-                  type="file"
-                  id="profile_pic"
-                  accept="image/*"
-                  {...register('profile_pic')}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="profile_pic"
-                  className="w-full pl-12 pr-4 py-3 rounded-lg border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition-colors duration-200 cursor-pointer flex items-center"
-                >
-                  <Upload className="absolute left-4 w-5 h-5 text-gray-400" />
-                  <span className="text-gray-500">
-                    {profilePic && profilePic[0] ? profilePic[0].name : 'Choose a profile picture'}
-                  </span>
-                </label>
               </div>
             </div>
 

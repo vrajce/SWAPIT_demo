@@ -6,42 +6,39 @@
 -- For demo purposes, we'll create them directly in the users table
 
 -- User 1: Sarah Johnson - Web Developer
-INSERT INTO users (id, fullname, email, location, description, profile_pic, public_profile, trust_percentage, created_at) VALUES
+INSERT INTO users (id, fullname, email, location, description, public_profile, trust_percentage, created_at) VALUES
 (
   '11111111-1111-1111-1111-111111111111',
   'Sarah Johnson',
   'sarah.johnson@example.com',
   'San Francisco, CA',
   'Full-stack web developer with 5+ years of experience. I love teaching React and JavaScript to beginners. Always excited to learn new technologies and share knowledge!',
-  'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=400',
   true,
   95,
   now() - interval '30 days'
 );
 
 -- User 2: Alex Chen - UI/UX Designer
-INSERT INTO users (id, fullname, email, location, description, profile_pic, public_profile, trust_percentage, created_at) VALUES
+INSERT INTO users (id, fullname, email, location, description, public_profile, trust_percentage, created_at) VALUES
 (
   '22222222-2222-2222-2222-222222222222',
   'Alex Chen',
   'alex.chen@example.com',
   'New York, NY',
   'Creative UI/UX designer passionate about user-centered design. I can teach design principles, Figma, and creative thinking. Looking to learn more about frontend development!',
-  'https://images.pexels.com/photos/927022/pexels-photo-927022.jpeg?auto=compress&cs=tinysrgb&w=400',
   true,
   92,
   now() - interval '25 days'
 );
 
 -- User 3: Maria Rodriguez - Data Scientist
-INSERT INTO users (id, fullname, email, location, description, profile_pic, public_profile, trust_percentage, created_at) VALUES
+INSERT INTO users (id, fullname, email, location, description, public_profile, trust_percentage, created_at) VALUES
 (
   '33333333-3333-3333-3333-333333333333',
   'Maria Rodriguez',
   'maria.rodriguez@example.com',
   'Austin, TX',
   'Data scientist and Python enthusiast. I specialize in machine learning and data analysis. Happy to teach Python, pandas, and ML concepts. Want to improve my Spanish and learn guitar!',
-  'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400',
   true,
   88,
   now() - interval '20 days'
